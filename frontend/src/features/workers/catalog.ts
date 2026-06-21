@@ -1,7 +1,7 @@
 export interface SourceSinkField {
   name: string;
   label: string;
-  type: "text" | "number" | "password" | "list" | "select";
+  type: "text" | "number" | "password" | "list" | "select" | "json";
   required: boolean;
   options?: string[];
   placeholder?: string;
@@ -35,6 +35,7 @@ export const sourceTypeSchemas: Record<string, SourceSinkTypeSchema> = {
     needsConnector: false,
     fields: [
       { name: "path", label: "Path", type: "text", required: true, placeholder: "/hook" },
+      { name: "methods", label: "Methods", type: "list", required: false, placeholder: "POST" },
       { name: "port", label: "Port", type: "number", required: false },
     ],
   },
@@ -59,6 +60,16 @@ export const sourceTypeSchemas: Record<string, SourceSinkTypeSchema> = {
     needsConnector: true,
     fields: [
       { name: "url", label: "Queue URL", type: "text", required: true },
+    ],
+  },
+  feishu_bitable_incremental: {
+    label: "Feishu Bitable Incremental",
+    needsConnector: true,
+    fields: [
+      { name: "app_token", label: "App Token", type: "text", required: true },
+      { name: "table_id", label: "Table ID", type: "text", required: true },
+      { name: "cursor_field", label: "Cursor Field", type: "text", required: true },
+      { name: "user_id_type", label: "User ID Type", type: "select", required: false, options: ["open_id", "union_id", "user_id"] },
     ],
   },
   mysql_incremental: {
@@ -102,8 +113,43 @@ export const sinkTypeSchemas: Record<string, SourceSinkTypeSchema> = {
     label: "HTTP Sink",
     needsConnector: false,
     fields: [
-      { name: "url", label: "URL", type: "text", required: true, placeholder: "https://..." },
-      { name: "method", label: "Method", type: "select", required: false, options: ["POST", "PUT", "PATCH", "DELETE"] },
+      {
+        name: "url",
+        label: "URL",
+        type: "text",
+        required: true,
+        placeholder: "https://api.example.com/orders/{{ body.order_id }}",
+      },
+      { name: "method", label: "Method", type: "select", required: false, options: ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+      {
+        name: "headers",
+        label: "Headers",
+        type: "json",
+        required: false,
+        placeholder: '{\n  "X-Trace-Id": "{{ meta.trace_id }}"\n}',
+      },
+      {
+        name: "params",
+        label: "Query params",
+        type: "json",
+        required: false,
+        placeholder: '{\n  "attempt": "{{ attempts }}"\n}',
+      },
+      {
+        name: "body",
+        label: "Body",
+        type: "json",
+        required: false,
+        placeholder: '{\n  "order_id": "{{ body.order_id }}"\n}',
+      },
+      { name: "timeout_s", label: "Timeout seconds", type: "number", required: false, placeholder: "5" },
+      {
+        name: "success_statuses",
+        label: "Success statuses",
+        type: "json",
+        required: false,
+        placeholder: "[200, 202]",
+      },
     ],
   },
   rabbitmq_queue: {
@@ -125,6 +171,17 @@ export const sinkTypeSchemas: Record<string, SourceSinkTypeSchema> = {
     needsConnector: true,
     fields: [
       { name: "url", label: "Queue URL", type: "text", required: true },
+    ],
+  },
+  feishu_bitable_table_sink: {
+    label: "Feishu Bitable Table Sink",
+    needsConnector: true,
+    fields: [
+      { name: "app_token", label: "App Token", type: "text", required: true },
+      { name: "table_id", label: "Table ID", type: "text", required: true },
+      { name: "mode", label: "Mode", type: "select", required: false, options: ["upsert", "create", "update"] },
+      { name: "match_fields", label: "Match Fields", type: "list", required: false },
+      { name: "user_id_type", label: "User ID Type", type: "select", required: false, options: ["open_id", "union_id", "user_id"] },
     ],
   },
   mysql_table_sink: {
