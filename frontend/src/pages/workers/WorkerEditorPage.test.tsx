@@ -383,6 +383,36 @@ describe("WorkerEditorPage", () => {
     );
   });
 
+  it("defaults new HTTP sinks to POST", async () => {
+    const user = userEvent.setup();
+    mockCreateWorker.mockResolvedValue({ id: EXISTING_WORKER.id });
+    renderPage();
+
+    await user.click(screen.getByRole("button", { name: "Configuration" }));
+    await user.click(screen.getByRole("button", { name: "Targets" }));
+    await user.click(screen.getByRole("button", { name: "Add target" }));
+
+    expect(screen.getByRole("combobox", { name: "Method" })).toHaveTextContent("POST");
+
+    await user.type(screen.getByLabelText("URL"), "https://example.com/events");
+    await user.click(screen.getByRole("button", { name: "Save configuration" }));
+
+    expect(mockCreateWorker).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sink_configs: [
+          {
+            type: "http_sink",
+            connector_id: null,
+            fields: {
+              url: "https://example.com/events",
+              method: "POST",
+            },
+          },
+        ],
+      }),
+    );
+  });
+
   it("filters target connectors by selected sink type", async () => {
     const user = userEvent.setup();
     mockUseWorkerQuery.mockReturnValue({
@@ -460,8 +490,7 @@ describe("WorkerEditorPage", () => {
     await user.click(screen.getByRole("button", { name: "Add variable" }));
     await user.type(screen.getByLabelText("Key 1"), "API_TOKEN");
     await user.type(screen.getByLabelText("Value 1"), "secret-token");
-    await user.click(screen.getByRole("button", { name: "Code source" }));
-    await user.click(screen.getByRole("button", { name: "Deploy to agent" }));
+    await user.click(screen.getByRole("button", { name: "Deploy" }));
 
     expect(screen.getByRole("button", { name: /prod-runner-1/ })).toBeInTheDocument();
     expect(screen.queryByText("full-runner")).not.toBeInTheDocument();

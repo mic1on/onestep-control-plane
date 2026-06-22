@@ -122,7 +122,7 @@ function emptyDraft(): Draft {
     name: "",
     description: "",
     handlerRef: "handler:handler",
-    source: { type: "interval", connector_id: null, fields: {} },
+    source: createSourceConfig("interval"),
     sinks: [],
     env: [],
     reportingEnabled: true,
@@ -277,7 +277,7 @@ function normalizeConfigFields(schema: SourceSinkTypeSchema | undefined, fields:
   if (!schema) return fields;
   const normalized: Record<string, unknown> = {};
   for (const field of schema.fields) {
-    const value = normalizeFieldValue(field, fields[field.name]);
+    const value = normalizeFieldValue(field, fields[field.name] ?? field.defaultValue);
     if (Array.isArray(value) && value.length === 0) continue;
     if (value !== undefined) normalized[field.name] = value;
   }
@@ -311,11 +311,6 @@ function normalizeSinkConfig(sink: WorkerSinkConfig): WorkerSinkConfig {
   };
 }
 
-function defaultSinkFields(type: string): Record<string, unknown> {
-  if (type === "http_sink") return { method: "POST" };
-  return {};
-}
-
 function isBodylessHttpMethod(method: unknown) {
   const normalized = String(method || "POST").trim().toUpperCase();
   return normalized === "GET" || normalized === "DELETE";
@@ -326,6 +321,30 @@ function shouldRenderSinkField(sink: WorkerSinkConfig, field: SourceSinkField) {
     return !isBodylessHttpMethod(sink.fields.method);
   }
   return true;
+}
+
+function defaultFieldsForSchema(schema: SourceSinkTypeSchema | undefined) {
+  const fields: Record<string, unknown> = {};
+  for (const field of schema?.fields ?? []) {
+    if (field.defaultValue !== undefined) fields[field.name] = field.defaultValue;
+  }
+  return fields;
+}
+
+function createSourceConfig(type: string): WorkerSourceConfig {
+  return {
+    type,
+    connector_id: null,
+    fields: defaultFieldsForSchema(sourceTypeSchemas[type]),
+  };
+}
+
+function createSinkConfig(type: string): WorkerSinkConfig {
+  return {
+    type,
+    connector_id: null,
+    fields: defaultFieldsForSchema(sinkTypeSchemas[type]),
+  };
 }
 
 function isDeployableAgent(agent: WorkerAgentSummary) {
@@ -574,7 +593,7 @@ export function WorkerEditorPage() {
   function addSink() {
     setDraft({
       ...draft,
-      sinks: [...draft.sinks, { type: "http_sink", connector_id: null, fields: defaultSinkFields("http_sink") }],
+      sinks: [...draft.sinks, createSinkConfig("http_sink")],
     });
   }
 
@@ -1204,11 +1223,7 @@ export function WorkerEditorPage() {
                           label={`${t("workerEditor.sinkType")} ${index + 1}`}
                           onChange={(nextValue) => {
                             const sinks = [...draft.sinks];
-                            sinks[index] = {
-                              type: nextValue,
-                              connector_id: null,
-                              fields: defaultSinkFields(nextValue),
-                            };
+                            sinks[index] = createSinkConfig(nextValue);
                             setDraft({ ...draft, sinks });
                           }}
                           options={sinkTypeOrder.map((typ) => ({
@@ -1536,13 +1551,7 @@ export function WorkerEditorPage() {
       >
         <VibehubSelect
           label={t("workerEditor.sourceType")}
-          onChange={(nextValue) =>
-            setTriggerDraft({
-              type: nextValue,
-              connector_id: null,
-              fields: {},
-            })
-          }
+          onChange={(nextValue) => setTriggerDraft(createSourceConfig(nextValue))}
           options={sourceTypeOrder.map((typ) => ({
             value: typ,
             label: sourceTypeLabel(typ),

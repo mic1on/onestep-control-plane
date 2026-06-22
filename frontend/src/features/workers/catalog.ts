@@ -5,6 +5,7 @@ export interface SourceSinkField {
   required: boolean;
   options?: string[];
   placeholder?: string;
+  defaultValue?: string | number | string[];
 }
 
 export interface SourceSinkTypeSchema {
@@ -120,7 +121,14 @@ export const sinkTypeSchemas: Record<string, SourceSinkTypeSchema> = {
         required: true,
         placeholder: "https://api.example.com/orders/{{ body.order_id }}",
       },
-      { name: "method", label: "Method", type: "select", required: false, options: ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+      {
+        name: "method",
+        label: "Method",
+        type: "select",
+        required: false,
+        options: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+        defaultValue: "POST",
+      },
       {
         name: "headers",
         label: "Headers",

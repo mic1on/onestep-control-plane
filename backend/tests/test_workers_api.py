@@ -6,10 +6,9 @@ import zipfile
 from uuid import UUID, uuid4
 
 import yaml
-from sqlalchemy import select
-
 from onestep_control_plane_api.api.connector_service import get_cipher
 from onestep_control_plane_api.db.models import Worker, WorkerAgentCommand
+from sqlalchemy import select
 
 
 def _create_worker_payload(name="order-sync"):
@@ -102,6 +101,25 @@ def test_create_and_list_worker(client):
     assert listing.json()["items"][0]["reporting_config"] == {
         "mode": "platform",
         "endpoint_url": None,
+    }
+
+
+def test_create_worker_defaults_http_sink_method_to_post(client):
+    payload = _create_worker_payload()
+    payload["sink_configs"] = [
+        {
+            "type": "http_sink",
+            "connector_id": None,
+            "fields": {"url": "https://example.com/events"},
+        }
+    ]
+
+    response = client.post("/api/v1/workers", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["sink_configs"][0]["fields"] == {
+        "url": "https://example.com/events",
+        "method": "POST",
     }
 
 

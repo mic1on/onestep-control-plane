@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 
 from onestep_control_plane_api.api.connector_service import (
     build_runtime_connector_payload,
-    get_connector_or_404,
     get_cipher,
+    get_connector_or_404,
 )
 from onestep_control_plane_api.api.schemas import (
     WorkerCreateRequest,
@@ -298,7 +298,11 @@ def compile_worker_package_for_download(db: Session, worker_id: UUID) -> Compile
     return compile_worker_package(db, get_worker_or_404(db, worker_id))
 
 
-async def deploy_worker(db: Session, worker_id: UUID, request: WorkerDeployRequest) -> dict[str, object]:
+async def deploy_worker(
+    db: Session,
+    worker_id: UUID,
+    request: WorkerDeployRequest,
+) -> dict[str, object]:
     worker = get_worker_or_404(db, worker_id)
     compiled_package = compile_worker_package(db, worker)
 
