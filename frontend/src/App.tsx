@@ -31,6 +31,7 @@ import ConfigEditor from './components/ConfigEditor';
 import ResourceChart from './components/ResourceChart';
 import LoginPage from './components/LoginPage';
 import NotificationSettingsPage from './components/NotificationSettingsPage';
+import LocaleSwitcher from './components/LocaleSwitcher';
 import {
   createAppRoutePath,
   parseAppRoute,
@@ -867,14 +868,17 @@ export default function App() {
                 )}
               </div>
             </div>
-            <button
-              onClick={() => void refreshControlPlaneData(selectedServiceId)}
-              disabled={isLoadingApi}
-              className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50"
-            >
-              <RefreshCw className={`h-3 w-3 ${isLoadingApi ? 'animate-spin' : ''}`} />
-              <span>{isLoadingApi ? tr('button.refreshing') : tr('button.refresh')}</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <LocaleSwitcher />
+              <button
+                onClick={() => void refreshControlPlaneData(selectedServiceId)}
+                disabled={isLoadingApi}
+                className="flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3 w-3 ${isLoadingApi ? 'animate-spin' : ''}`} />
+                <span>{isLoadingApi ? tr('button.refreshing') : tr('button.refresh')}</span>
+              </button>
+            </div>
           </div>
 
           {services.length === 0 ? (
