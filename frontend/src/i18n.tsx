@@ -594,7 +594,7 @@ const zhCN: Record<MessageKey, string> = {
   'topology.taskProcessing': '任务处理',
   'topology.taskTitle': '{task} 任务处理',
   'topology.throughputTarget': '吞吐目标',
-  'topology.title': '拓扑流',
+  'topology.title': '拓扑图',
   'topology.uptimeStatus': '运行时长状态',
   'topology.workerThreads': '{count} 个 worker 线程',
   'topology.sinkTitle': '{sink} Sink',
