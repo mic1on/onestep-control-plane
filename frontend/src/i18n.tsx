@@ -627,9 +627,44 @@ const messages: Record<Locale, Record<MessageKey, string>> = {
 
 type Values = Record<string, string | number>;
 
+const LOCALE_STORAGE_KEY = 'onestep.controlPlane.locale';
+const SUPPORTED_LOCALES: Locale[] = ['en', 'zh-CN'];
+
+/**
+ * Read the locale the user previously chose. Returns null when nothing is
+ * stored or the stored value is no longer a supported locale, so the caller
+ * can fall back to browser detection. Mirrors readEnvironmentFilter in App.tsx.
+ */
+export function readStoredLocale(): Locale | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (stored && (SUPPORTED_LOCALES as string[]).includes(stored)) {
+      return stored as Locale;
+    }
+  } catch {
+    // localStorage may be unavailable (private mode); fall back to default.
+  }
+  return null;
+}
+
+/**
+ * Persist the user's locale choice. Silently ignores failures (private mode,
+ * quota, SSR) so switching the language never throws.
+ */
+export function writeStoredLocale(locale: Locale): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+  } catch {
+    // Ignore persistence failures.
+  }
+}
+
 interface I18nContextValue {
   locale: Locale;
   t: (key: MessageKey, values?: Values) => string;
+  setLocale: (locale: Locale) => void;
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -665,14 +700,23 @@ export function I18nProvider({
   children: ReactNode;
   initialLocale?: Locale;
 }) {
-  const [locale] = useState<Locale>(() => initialLocale ?? getBrowserLocale());
+  // Priority: user's persisted choice > explicit prop > browser detection.
+  const [locale, setLocaleState] = useState<Locale>(
+    () => readStoredLocale() ?? initialLocale ?? getBrowserLocale(),
+  );
 
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
 
+  // Update both the React state and localStorage so the choice survives reload.
+  const setLocale = useCallback((next: Locale) => {
+    setLocaleState(next);
+    writeStoredLocale(next);
+  }, []);
+
   const t = useCallback((key: MessageKey, values?: Values) => translate(locale, key, values), [locale]);
-  const value = useMemo(() => ({ locale, t }), [locale, t]);
+  const value = useMemo(() => ({ locale, t, setLocale }), [locale, t, setLocale]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

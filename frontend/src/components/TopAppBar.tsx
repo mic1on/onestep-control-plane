@@ -1,6 +1,7 @@
 import { Bell, ChevronDown } from 'lucide-react';
 import { Service } from '../types';
 import { useI18n } from '../i18n';
+import LocaleSwitcher from './LocaleSwitcher';
 
 type RuntimeEnvironment = 'prod' | 'dev';
 
@@ -133,6 +134,8 @@ export default function TopAppBar({
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span>{t('top.systemNormal')}</span>
         </div>
+
+        <LocaleSwitcher />
 
         <button
           onClick={onNotificationsClick}
