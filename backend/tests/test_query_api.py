@@ -517,8 +517,8 @@ def test_list_services_sorts_online_first_then_attention_then_offline(
         last_seen_at=now - timedelta(seconds=15),
     )
 
-    # Offline with zero instances, alphabetic name "aaa..." to confirm status, not name, drives order.
-    empty_service = seed_service(db_session, name="aaa-empty", environment="prod")
+    # Offline with zero instances; name "aaa..." sorts first, confirming status drives order.
+    seed_service(db_session, name="aaa-empty", environment="prod")
     db_session.commit()
 
     response = client.get("/api/v1/services", params={"environment": "prod"})
