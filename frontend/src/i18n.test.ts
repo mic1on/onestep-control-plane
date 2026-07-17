@@ -25,6 +25,14 @@ describe('translate', () => {
     expect(translate('zh-CN', 'api.usingDemoData', { error: 'offline' })).toBe('正在使用演示数据：offline');
     expect(translate('en', 'instances.selected', { count: 2 })).toBe('2 instances selected');
   });
+
+  // Regression: the sink panel title used to be "{sink} Analytics Engine",
+  // which fabricated an analytics role for every sink (a memory_queue was
+  // badged as an "analysis engine"). Keep it neutral so any sink kind fits.
+  it('uses a neutral sink title that fits any sink kind', () => {
+    expect(translate('en', 'topology.sinkTitle', { sink: 'demo.results' })).toBe('demo.results Sink');
+    expect(translate('zh-CN', 'topology.sinkTitle', { sink: 'demo.results' })).toBe('demo.results Sink');
+  });
 });
 
 describe('locale persistence', () => {
