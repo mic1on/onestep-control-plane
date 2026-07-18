@@ -3454,6 +3454,7 @@ def test_get_service_task_detail_includes_task_control_state(client, db_session)
                     "supported_commands": [
                         "pause_task",
                         "resume_task",
+                        "restart_task",
                         "discard_dead_letters",
                         "replay_dead_letters",
                         "run_task_once",
@@ -3510,6 +3511,7 @@ def test_get_service_task_detail_includes_task_control_state(client, db_session)
         accepted_capabilities_json=[
             "command.pause_task",
             "command.resume_task",
+            "command.restart_task",
             "command.discard_dead_letters",
             "command.replay_dead_letters",
             "command.run_task_once",
@@ -3555,6 +3557,7 @@ def test_get_service_task_detail_includes_task_control_state(client, db_session)
             "supported_commands": [
                 "pause_task",
                 "resume_task",
+                "restart_task",
                 "discard_dead_letters",
                 "replay_dead_letters",
                 "run_task_once",

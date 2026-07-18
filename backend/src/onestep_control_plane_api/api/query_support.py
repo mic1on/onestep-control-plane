@@ -919,6 +919,7 @@ def _extract_task_supported_commands(
         if command_kind in {
             "pause_task",
             "resume_task",
+            "restart_task",
             "discard_dead_letters",
             "replay_dead_letters",
             "run_task_once",
