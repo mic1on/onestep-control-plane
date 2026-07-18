@@ -36,6 +36,13 @@ class APIModel(BaseModel):
 
 Environment = Literal["dev", "staging", "prod"]
 HealthStatus = Literal["ok", "degraded", "error", "starting", "unknown"]
+# View-facing status enums. The plane derives these from the raw
+# ServiceListStatus / HealthStatus / metrics so that clients never have to
+# recompute business state. All lowercase to keep a single canonical style.
+ServiceViewStatus = Literal["running", "degraded", "stopped"]
+TaskViewStatus = Literal["running", "idle", "failed", "paused", "offline"]
+InstanceViewStatus = Literal["running", "starting", "failed", "stopped"]
+EventLogLevel = Literal["error", "warn", "info"]
 TaskEventKind = Literal["started", "failed", "retried", "dead_lettered", "cancelled", "succeeded"]
 NotificationProvider = Literal["feishu", "wechat_work"]
 NotificationEventType = Literal[
@@ -58,6 +65,7 @@ AgentCommandKind = Literal[
     "drain",
     "pause_task",
     "resume_task",
+    "restart_task",
     "discard_dead_letters",
     "replay_dead_letters",
     "run_task_once",
@@ -71,6 +79,7 @@ ServiceCommandFanoutKind = Literal[
     "drain",
     "pause_task",
     "resume_task",
+    "restart_task",
     "discard_dead_letters",
     "replay_dead_letters",
     "run_task_once",
@@ -81,6 +90,7 @@ ServiceCommandFanoutKind = Literal[
 TaskCommandKind = Literal[
     "pause_task",
     "resume_task",
+    "restart_task",
     "discard_dead_letters",
     "replay_dead_letters",
     "run_task_once",
@@ -158,6 +168,7 @@ TASK_SCOPED_COMMAND_KINDS = frozenset(
     {
         "pause_task",
         "resume_task",
+        "restart_task",
         "discard_dead_letters",
         "replay_dead_letters",
         "run_task_once",
@@ -170,6 +181,7 @@ REASON_REQUIRED_COMMAND_KINDS = frozenset(
         "drain",
         "pause_task",
         "resume_task",
+        "restart_task",
         "discard_dead_letters",
         "replay_dead_letters",
         "run_task_once",
@@ -985,6 +997,14 @@ class ServiceSummary(APIModel):
     source_kinds: list[str] = Field(default_factory=list)
     task_count: int = Field(default=0, ge=0)
     failing_task_count: int = Field(default=0, ge=0)
+    # ---- Derived view-facing fields (computed by the plane) ----
+    view_status: ServiceViewStatus
+    success_rate: float = Field(ge=0, le=100)
+    throughput_per_min: int = Field(default=0, ge=0)
+    error_count: int = Field(default=0, ge=0)
+    uptime_reference_at: datetime | None = None
+    online_task_count: int = Field(default=0, ge=0)
+    standby_instance_count: int = Field(default=0, ge=0)
     created_at: datetime
     updated_at: datetime
 
@@ -1205,6 +1225,8 @@ class InstanceSummary(APIModel):
     status: HealthStatus
     connectivity: InstanceConnectivity
     active_session: AgentSessionSummary | None = None
+    # Derived view-facing status mapped from HealthStatus.
+    view_status: InstanceViewStatus
     created_at: datetime
     updated_at: datetime
 
@@ -1262,6 +1284,9 @@ class TaskEventSummary(APIModel):
     meta: dict[str, Any] = Field(default_factory=dict)
     received_at: datetime
     created_at: datetime
+    # Derived log level mapped from kind (failed/dead_lettered -> error,
+    # retried -> warn, otherwise info).
+    level: EventLogLevel = "info"
 
 
 class TaskEventListResponse(PaginatedResponse):
@@ -1303,6 +1328,21 @@ class TaskDashboardSummary(APIModel):
     max_p95_duration_ms: float | None = Field(default=None, ge=0)
     last_event_at: datetime | None = None
     event_counts: TaskEventCounts
+    # Aggregated across this service's online instances: True when any instance
+    # reported pause_requested=true for this task; False when all known instances
+    # reported false; None when no instance reported a known state. Drives the
+    # "paused" UI status on the dashboard list (distinct from per-instance detail).
+    pause_requested: bool | None = None
+    # ---- Derived view-facing fields (computed by the plane) ----
+    view_status: TaskViewStatus = "idle"
+    success_rate: float = Field(default=100, ge=0, le=100)
+    throughput_per_min: int = Field(default=0, ge=0)
+    error_count: int = Field(default=0, ge=0)
+    retry_attempts: int = Field(default=0, ge=0)
+    source_label: str | None = None
+    sink_label: str | None = None
+    config_yaml: str | None = None
+    uptime_reference_at: datetime | None = None
 
 
 class TaskDashboardListResponse(PaginatedResponse):

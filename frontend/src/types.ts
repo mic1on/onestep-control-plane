@@ -1,19 +1,23 @@
+// Domain view models. Every status / metric field below is computed by the
+// control plane; the frontend only formats scalars (uptime, throughput units)
+// and maps enum values to i18n labels. No business logic lives here.
+
 export interface Service {
   id: string;
   apiName?: string;
   environment?: 'dev' | 'staging' | 'prod';
   name: string;
-  status: 'running' | 'degraded' | 'stopped';
-  uptime: string;
-  throughput: string;
-  throughputValue: number; // For rendering charts or calculations
+  /** Derived by the plane from ServiceListStatus + online instance count. */
+  viewStatus: 'running' | 'degraded' | 'stopped';
+  /** Reference timestamp the UI uses to render a live "time since" label. */
+  uptimeReferenceAt: string | null;
+  /** Per-minute fetched throughput over the lookback window (scalar). */
+  throughputPerMin: number;
   successRate: number;
-  errorCount24h: number;
+  errorCount: number;
   totalInstances: number;
   activeInstances: number;
   standbyInstances: number;
-  taskHealth: number;
-  taskHealthTrend: string;
   totalTaskCount: number;
   failingTaskCount: number;
   onlineTaskCount: number;
@@ -32,7 +36,8 @@ export interface Task {
   environment?: 'dev' | 'staging' | 'prod';
   serviceId: string;
   name: string;
-  status: 'Running' | 'Idle' | 'Stopped' | 'Failed' | 'Offline';
+  /** Derived by the plane from online state, pause_requested, error_count, activity. */
+  viewStatus: 'running' | 'idle' | 'failed' | 'paused' | 'offline';
   pipelineSource: string;
   pipelineSourceLabel: string;
   /**
@@ -53,9 +58,9 @@ export interface Task {
   sinkName: string | null;
   concurrency: number;
   retryAttempts: number;
-  uptime: string;
-  throughputValue: string;
-  throughputNum: number;
+  /** Reference timestamp the UI uses to render a live "time since" label. */
+  uptimeReferenceAt: string | null;
+  throughputPerMin: number;
   successRate: number;
   errorCount: number;
   configYaml: string;
@@ -70,12 +75,14 @@ export interface Instance {
   nodeName: string;
   pid: number;
   version: string;
-  status: 'Running' | 'Starting' | 'Failed' | 'Stopped';
+  /** Derived by the plane from the reported HealthStatus. */
+  viewStatus: 'running' | 'starting' | 'failed' | 'stopped';
 }
 
 export interface LogEntry {
   timestamp: string;
-  level: 'info' | 'warn' | 'error' | 'debug';
+  /** Derived by the plane from the event kind. */
+  level: 'info' | 'warn' | 'error';
   message: string;
   source: string;
 }

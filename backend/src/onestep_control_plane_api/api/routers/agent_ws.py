@@ -69,6 +69,7 @@ SUPPORTED_CAPABILITIES = frozenset(
         "command.drain",
         "command.pause_task",
         "command.resume_task",
+        "command.restart_task",
         "command.discard_dead_letters",
         "command.replay_dead_letters",
         "command.run_task_once",

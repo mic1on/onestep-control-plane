@@ -12,7 +12,7 @@ const serviceSummary = {
   name: 'control-plane-demo',
   environment: 'dev',
   latest_deployment_version: '2026.7.16',
-  service_status: 'online',
+  service_status: 'offline',
   latest_topology_hash: 'topology-demo',
   latest_sync_at: '2026-07-16T08:00:00Z',
   instance_count: 0,
@@ -20,6 +20,14 @@ const serviceSummary = {
   last_seen_at: null,
   source_kinds: ['memory_queue'],
   task_count: 1,
+  failing_task_count: 0,
+  view_status: 'stopped',
+  success_rate: 100,
+  throughput_per_min: 0,
+  error_count: 0,
+  uptime_reference_at: null,
+  online_task_count: 0,
+  standby_instance_count: 0,
   created_at: '2026-07-16T08:00:00Z',
   updated_at: '2026-07-16T08:00:00Z',
 };
@@ -89,13 +97,24 @@ describe('loadControlPlaneData', () => {
               weighted_avg_duration_ms: null,
               max_p95_duration_ms: null,
               last_event_at: null,
+              pause_requested: null,
               event_counts: {
+                started: 0,
                 failed: 0,
                 retried: 0,
                 dead_lettered: 0,
                 cancelled: 0,
                 succeeded: 0,
               },
+              view_status: 'offline',
+              success_rate: 100,
+              throughput_per_min: 0,
+              error_count: 0,
+              retry_attempts: 1,
+              source_label: 'control-plane-demo.dead-letter',
+              sink_label: 'Handler',
+              config_yaml: '',
+              uptime_reference_at: null,
             },
           ],
           total: 1,
@@ -109,8 +128,8 @@ describe('loadControlPlaneData', () => {
 
     const data = await loadControlPlaneData();
 
-    expect(data.services[0]).toEqual(expect.objectContaining({ status: 'stopped', activeInstances: 0 }));
-    expect(data.tasks[0]).toEqual(expect.objectContaining({ name: 'inspect_dead_letter', status: 'Offline' }));
+    expect(data.services[0]).toEqual(expect.objectContaining({ viewStatus: 'stopped', activeInstances: 0 }));
+    expect(data.tasks[0]).toEqual(expect.objectContaining({ name: 'inspect_dead_letter', viewStatus: 'offline' }));
   });
 
   it('passes raw source_kind / source_config / source_name through to the Task', async () => {
@@ -173,13 +192,24 @@ describe('loadControlPlaneData', () => {
               weighted_avg_duration_ms: null,
               max_p95_duration_ms: null,
               last_event_at: null,
+              pause_requested: null,
               event_counts: {
+                started: 0,
                 failed: 0,
                 retried: 0,
                 dead_lettered: 0,
                 cancelled: 0,
                 succeeded: 0,
               },
+              view_status: 'offline',
+              success_rate: 100,
+              throughput_per_min: 0,
+              error_count: 0,
+              retry_attempts: 1,
+              source_label: 'mysql.orders',
+              sink_label: 'mysql.audit',
+              config_yaml: '',
+              uptime_reference_at: null,
             },
           ],
           total: 1,
@@ -239,13 +269,24 @@ describe('loadControlPlaneData', () => {
           weighted_avg_duration_ms: 42,
           max_p95_duration_ms: 84,
           last_event_at: null,
+          pause_requested: false,
           event_counts: {
+            started: 12,
             failed: 1,
             retried: 0,
             dead_lettered: 0,
             cancelled: 0,
             succeeded: 11,
           },
+          view_status: 'failed',
+          success_rate: 91.67,
+          throughput_per_min: 0,
+          error_count: 1,
+          retry_attempts: 1,
+          source_label: 'control-plane-demo.dead-letter',
+          sink_label: 'Handler',
+          config_yaml: '',
+          uptime_reference_at: '2026-07-16T07:59:00Z',
         },
         task_control: { task_name: 'inspect_dead_letter', instances: [] },
         recent_metric_windows: [
@@ -281,7 +322,7 @@ describe('loadControlPlaneData', () => {
       environment: 'dev',
       serviceId: 'control-plane-demo:dev',
       name: 'inspect_dead_letter',
-      status: 'Running',
+      viewStatus: 'running',
       pipelineSource: 'memory_queue',
       pipelineSourceLabel: 'memory_queue',
       sourceKind: 'memory_queue',
@@ -294,9 +335,8 @@ describe('loadControlPlaneData', () => {
       sinkName: 'Handler',
       concurrency: 2,
       retryAttempts: 1,
-      uptime: '1m ago',
-      throughputValue: '12/min',
-      throughputNum: 12,
+      uptimeReferenceAt: null,
+      throughputPerMin: 12,
       successRate: 91.67,
       errorCount: 1,
       configYaml: '',
@@ -304,7 +344,7 @@ describe('loadControlPlaneData', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0][0])).toContain(
-      '/api/v1/services/control-plane-demo/tasks/inspect_dead_letter?environment=dev&lookback_minutes=60&metric_window_limit=24&event_limit=1',
+      '/api/v1/services/control-plane-demo/tasks/inspect_dead_letter?environment=dev&lookback_minutes=15&metric_window_limit=24&event_limit=1',
     );
     expect(windows).toEqual([
       expect.objectContaining({

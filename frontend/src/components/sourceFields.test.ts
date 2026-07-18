@@ -28,9 +28,38 @@ describe('buildSourceDetails', () => {
     expect(keys).toContain('brokers');
   });
 
-  it('falls back to the generic event-ingestion type for other kinds', () => {
+  it('falls back to the generic event-ingestion type for unknown queue kinds', () => {
     const details = buildSourceDetails('rabbitmq_queue', { queue: 'work' }, null);
     expect(details.typeKey).toBe('topology.eventIngestion');
+  });
+
+  it('classifies interval as an interval trigger (not event ingestion)', () => {
+    // Regression: interval sources reported seconds=5 but the type badge
+    // showed "Event Ingestion / Queue" because the classifier only knew
+    // mysql/kafka and fell through for everything else.
+    const details = buildSourceDetails('interval', { seconds: 5 }, 'interval:5s');
+    expect(details.typeKey).toBe('topology.intervalTrigger');
+    // The seconds field row must still render so the interval value is visible.
+    const secondsRow = details.rows.find((r) => r.configKey === 'seconds')!;
+    expect(secondsRow).toBeDefined();
+    expect(
+      resolveRowValue(secondsRow, 'interval', { seconds: 5 }, null, t),
+    ).toEqual({ value: '5', mono: false, placeholder: false });
+  });
+
+  it('classifies cron as a cron schedule', () => {
+    const details = buildSourceDetails('cron', { expression: '*/5 * * * *' }, null);
+    expect(details.typeKey).toBe('topology.cronTrigger');
+  });
+
+  it('classifies webhook as a webhook trigger', () => {
+    const details = buildSourceDetails('webhook', { path: '/hook' }, null);
+    expect(details.typeKey).toBe('topology.webhookTrigger');
+  });
+
+  it('classifies memory_queue as an in-memory queue (not event ingestion)', () => {
+    const details = buildSourceDetails('memory_queue', { maxsize: 0 }, null);
+    expect(details.typeKey).toBe('topology.memoryQueue');
   });
 });
 
