@@ -10,6 +10,7 @@ from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from onestep_control_plane_api.api.agent_command_service import expire_stale_commands
+from onestep_control_plane_api.api.common import utcnow
 from onestep_control_plane_api.api.constants import (
     HEALTH_STATUS_VALUES,
     RETRY_ATTEMPTS_CONFIG_KEYS,
@@ -989,6 +990,57 @@ def build_task_pause_requested_map(
     return result
 
 
+def build_task_supported_commands_map(
+    db: Session,
+    *,
+    service_id: UUID,
+    as_of: datetime | None = None,
+) -> dict[str, list[str]]:
+    as_of = as_of or utcnow()
+    cutoff = online_cutoff(as_of)
+    instances = db.scalars(select(Instance).where(Instance.service_id == service_id)).all()
+    online_instances = [
+        instance
+        for instance in instances
+        if get_instance_connectivity(instance, cutoff=cutoff) == "online"
+    ]
+    active_sessions_by_instance_id = get_active_sessions_by_instance_id(
+        db,
+        service_id=service_id,
+    )
+
+    supported_by_task: dict[str, set[str]] = {}
+    for instance in online_instances:
+        active_session = active_sessions_by_instance_id.get(instance.instance_id)
+        if active_session is None or not isinstance(instance.app_snapshot_json, dict):
+            continue
+        task_control_states = instance.app_snapshot_json.get("task_control_states")
+        if not isinstance(task_control_states, list):
+            continue
+        for value in task_control_states:
+            if not isinstance(value, dict):
+                continue
+            task_name = value.get("task_name")
+            if not isinstance(task_name, str):
+                continue
+            supported_by_task.setdefault(task_name, set()).update(
+                _task_control_supported_commands(active_session, dict(value))
+            )
+
+    command_order = [
+        "pause_task",
+        "resume_task",
+        "restart_task",
+        "discard_dead_letters",
+        "replay_dead_letters",
+        "run_task_once",
+    ]
+    return {
+        task_name: [command for command in command_order if command in supported_commands]
+        for task_name, supported_commands in supported_by_task.items()
+    }
+
+
 def build_task_event_summary(event: TaskEvent) -> TaskEventSummary:
     return TaskEventSummary(
         event_id=event.event_id,
@@ -1341,6 +1393,14 @@ def build_task_summary_map(
             summary = TaskDashboardSummary(task_name=task_name, event_counts=TaskEventCounts())
             summaries[task_name] = summary
         summary.pause_requested = pause_requested
+
+    supported_commands_map = build_task_supported_commands_map(db, service_id=service_id)
+    for task_name, supported_commands in supported_commands_map.items():
+        summary = summaries.get(task_name)
+        if summary is None:
+            summary = TaskDashboardSummary(task_name=task_name, event_counts=TaskEventCounts())
+            summaries[task_name] = summary
+        summary.supported_commands = supported_commands
 
     # Finalise view-facing derived fields on every summary so clients never have
     # to recompute business state.

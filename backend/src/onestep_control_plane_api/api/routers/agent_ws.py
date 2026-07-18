@@ -62,6 +62,7 @@ SUPPORTED_CAPABILITIES = frozenset(
         "telemetry.sync",
         "telemetry.heartbeat",
         "telemetry.metrics",
+        "telemetry.custom_metrics",
         "telemetry.events",
         "command.ping",
         "command.shutdown",

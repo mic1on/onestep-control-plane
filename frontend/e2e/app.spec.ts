@@ -108,6 +108,7 @@ function taskSummary(overrides: Record<string, unknown> = {}) {
     max_p95_duration_ms: 120,
     last_event_at: ISO_NOW,
     pause_requested: false,
+    supported_commands: ["pause_task", "resume_task", "restart_task", "run_task_once"],
     event_counts: { ...eventCounts, retried: 5, succeeded: 590 },
     view_status: "running",
     success_rate: 99.15,
@@ -173,6 +174,7 @@ function instanceSummary(overrides: Record<string, unknown> = {}) {
 
 async function installApiMocks(page: Page) {
   const commands: Array<{ method: string; path: string; query: Record<string, string>; body: unknown }> = [];
+  const commandResults: Array<{ command_id: string; kind: string; status: string; updated_at: string }> = [];
   let serviceListHits = 0;
   const pauseRequestedByTask = new Map<string, boolean>();
 
@@ -287,6 +289,7 @@ async function installApiMocks(page: Page) {
         query,
         body,
       });
+      const commandId = `cmd-${commands.length.toString().padStart(4, "0")}`;
       const taskCommandMatch = path.match(/^\/api\/v1\/services\/([^/]+)\/tasks\/([^/]+)\/commands$/);
       if (taskCommandMatch && body?.kind) {
         const serviceName = decodeURIComponent(taskCommandMatch[1]);
@@ -295,15 +298,39 @@ async function installApiMocks(page: Page) {
         if (body.kind === "pause_task") pauseRequestedByTask.set(key, true);
         if (body.kind === "resume_task") pauseRequestedByTask.set(key, false);
       }
+      if (body?.kind) {
+        commandResults.unshift({
+          command_id: commandId,
+          kind: body.kind,
+          status: body.kind === "restart_task" ? "succeeded" : "dispatched",
+          updated_at: ISO_NOW,
+        });
+      }
       await route.fulfill({
         status: 202,
         contentType: "application/json",
         body: JSON.stringify({
-          command_id: "99999999-9999-9999-9999-999999999999",
-          status: "queued",
-          counts: { dispatched: 0, queued: 1, skipped: 0, rejected: 0, total: 1 },
+          kind: body?.kind ?? "restart",
+          target_mode: "all_online",
+          offline_behavior: "skip",
           noop_reason_code: null,
           noop_reason_message: null,
+          counts: { dispatched: 1, queued: 0, skipped: 0, rejected: 0, total: 1 },
+          dispatched: [
+            {
+              instance_id: "11111111-1111-1111-1111-111111111111",
+              node_name: "worker-a",
+              connectivity: "online",
+              session_id: "session-a",
+              command_id: commandId,
+              outcome: "dispatched",
+              reason_code: null,
+              reason_message: null,
+            },
+          ],
+          queued: [],
+          skipped: [],
+          rejected: [],
         }),
       });
       return;
@@ -351,6 +378,23 @@ async function installApiMocks(page: Page) {
             total_tasks: 3,
             failing_tasks: 2,
           },
+        }),
+      });
+      return;
+    }
+
+    const serviceCommandsMatch = path.match(/^\/api\/v1\/services\/([^/]+)\/commands$/);
+    if (serviceCommandsMatch) {
+      const kind = query.kind;
+      const items = kind ? commandResults.filter((command) => command.kind === kind) : commandResults;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items,
+          total: items.length,
+          limit: 100,
+          offset: 0,
         }),
       });
       return;

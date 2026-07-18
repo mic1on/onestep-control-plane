@@ -4,10 +4,12 @@ import {
   dispatchServiceCommand,
   dispatchTaskCommand,
   formatUptime,
+  getFanoutCommandIds,
   getApiErrorMessage,
   isAuthRequiredError,
   loadControlPlaneData,
   loadTaskMetricWindows,
+  pollTaskCommandCompletion,
   pollTaskPauseRequested,
   type Environment,
   type ServiceCommandFanoutResponse,
@@ -20,7 +22,7 @@ import {
   INITIAL_INSTANCES,
   INITIAL_LOGS,
 } from './initialData';
-import { Service, Task, Instance, LogEntry } from './types';
+import { Service, Task, Instance, LogEntry, type TaskCommandKind } from './types';
 import Sidebar from './components/Sidebar';
 import ServicesList from './components/ServicesList';
 import OverviewPage from './components/OverviewPage';
@@ -82,8 +84,19 @@ const EMPTY_SERVICE_SUMMARY: ServiceSummaryStats = {
   failing_tasks: 0,
 };
 
+function taskSupportsCommand(task: Task | null | undefined, command: TaskCommandKind): boolean {
+  return task?.supportedCommands.includes(command) ?? false;
+}
+
+function getTaskToggleCommand(task: Task | null | undefined): 'pause_task' | 'resume_task' | null {
+  if (task?.viewStatus === 'running') return 'pause_task';
+  if (task?.viewStatus === 'paused') return 'resume_task';
+  return null;
+}
+
 function isTaskToggleSupported(task: Task | null | undefined): boolean {
-  return task?.viewStatus === 'running' || task?.viewStatus === 'paused';
+  const command = getTaskToggleCommand(task);
+  return command !== null && taskSupportsCommand(task, command);
 }
 
 const SERVICE_TABS: ServiceTab[] = ['Tasks', 'Instances', 'Configuration', 'Logs'];
@@ -377,6 +390,7 @@ export default function App() {
   const serviceHasOnlineInstances = selectedService.activeInstances > 0;
   const selectedTaskIsOffline = selectedTask?.viewStatus === 'offline' || !serviceHasOnlineInstances;
   const selectedTaskCanToggle = isTaskToggleSupported(selectedTask);
+  const selectedTaskCanRestart = taskSupportsCommand(selectedTask, 'restart_task');
   const isPendingTaskToggle = !!selectedTask && pendingTaskId === selectedTask.id;
   const headerStatus = getHeaderStatus(selectedService.viewStatus, selectedTask?.viewStatus, tr);
 
@@ -503,11 +517,15 @@ export default function App() {
         addToast(tr('toast.serviceNoOnlineInstances', { name: taskService?.name ?? task.name }), 'warn');
         return;
       }
-      if (!isTaskToggleSupported(task)) {
+      const kind = getTaskToggleCommand(task);
+      if (kind === null) {
         addToast(tr('toast.taskToggleUnavailable', { name: task.name }), 'warn');
         return;
       }
-      const kind: 'pause_task' | 'resume_task' = task.viewStatus === 'running' ? 'pause_task' : 'resume_task';
+      if (!taskSupportsCommand(task, kind)) {
+        addToast(tr('toast.taskCommandUnsupported', { name: task.name }), 'warn');
+        return;
+      }
       const expectedPause = kind === 'pause_task'; // pause_task -> wait for pause_requested=true
       addToast(tr('toast.taskDispatch', { kind: kind.replace('_', ' '), name: task.name }), 'info');
       setPendingTaskId(taskId);
@@ -554,6 +572,10 @@ export default function App() {
         addToast(tr('toast.serviceNoOnlineInstances', { name: taskService?.name ?? task.name }), 'warn');
         return;
       }
+      if (!taskSupportsCommand(task, 'restart_task')) {
+        addToast(tr('toast.taskCommandUnsupported', { name: task.name }), 'warn');
+        return;
+      }
       addToast(tr('toast.taskRestartDispatch', { name: task.name }), 'info');
       setPendingTaskId(taskId);
       try {
@@ -563,13 +585,20 @@ export default function App() {
           task.name,
           tr('toast.taskRestartAccepted', { name: task.name }),
         );
-        // Refresh regardless so the detail/list reflect whatever landed. The
-        // fresh runner reports a new metric window via the next heartbeat.
-        await refreshControlPlaneData(task.serviceId, true);
         if (!accepted) {
           // No eligible targets (older worker without command.restart_task, or
           // no online instances); handleFanoutResponse already toasted.
+          await refreshControlPlaneData(task.serviceId, true);
           return;
+        }
+        const completion = await pollTaskCommandCompletion(task, getFanoutCommandIds(response));
+        // Refresh regardless so the detail/list reflect whatever landed. The
+        // fresh runner reports a new metric window via the next heartbeat.
+        await refreshControlPlaneData(task.serviceId, true);
+        if (completion.failed) {
+          addToast(tr('toast.taskRestartFailed', { name: task.name }), 'warn');
+        } else if (!completion.completed) {
+          addToast(tr('toast.taskRestartTimeout', { name: task.name }), 'warn');
         }
       } catch (error) {
         handleApiActionError(error, tr('error.taskRestartFailed'));
@@ -828,7 +857,7 @@ export default function App() {
                     <>
                       <button
                         onClick={() => handleRestartTask(selectedTask.id)}
-                        disabled={selectedTaskIsOffline || !apiConnected || isPendingTaskToggle}
+                        disabled={selectedTaskIsOffline || !selectedTaskCanRestart || !apiConnected || isPendingTaskToggle}
                         className="flex items-center gap-1.5 px-4 py-2 border border-slate-200 rounded-lg text-indigo-600 hover:bg-slate-100 transition-colors text-xs font-bold bg-white shadow-xs disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {isPendingTaskToggle ? (
@@ -836,7 +865,13 @@ export default function App() {
                         ) : (
                           <RotateCcw className="w-4 h-4" />
                         )}
-                        <span>{isPendingTaskToggle ? tr('button.processing') : tr('button.restart')}</span>
+                        <span>
+                          {isPendingTaskToggle
+                            ? tr('button.processing')
+                            : selectedTaskCanRestart
+                            ? tr('button.restart')
+                            : tr('button.unavailable')}
+                        </span>
                       </button>
                       <button
                         onClick={() => handleToggleTaskStatus(selectedTask.id)}

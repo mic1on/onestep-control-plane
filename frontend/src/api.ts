@@ -1,4 +1,4 @@
-import type { Instance, LogEntry, Service, Task } from './types';
+import type { Instance, LogEntry, Service, Task, TaskCommandKind } from './types';
 
 export type Environment = 'dev' | 'staging' | 'prod';
 
@@ -10,6 +10,16 @@ type TaskViewStatus = 'running' | 'idle' | 'failed' | 'paused' | 'offline';
 type InstanceViewStatus = 'running' | 'starting' | 'failed' | 'stopped';
 type EventLogLevel = 'error' | 'warn' | 'info';
 type TaskEventKind = 'started' | 'failed' | 'retried' | 'dead_lettered' | 'cancelled' | 'succeeded';
+type AgentCommandStatus =
+  | 'pending'
+  | 'dispatched'
+  | 'accepted'
+  | 'expired'
+  | 'rejected'
+  | 'succeeded'
+  | 'failed'
+  | 'timeout'
+  | 'cancelled';
 type AgentCommandKind =
   | 'ping'
   | 'shutdown'
@@ -17,19 +27,13 @@ type AgentCommandKind =
   | 'drain'
   | 'pause_task'
   | 'resume_task'
+  | 'restart_task'
   | 'discard_dead_letters'
   | 'replay_dead_letters'
   | 'run_task_once'
   | 'sync_now'
   | 'flush_metrics'
   | 'flush_events';
-type TaskCommandKind =
-  | 'pause_task'
-  | 'resume_task'
-  | 'restart_task'
-  | 'discard_dead_letters'
-  | 'replay_dead_letters'
-  | 'run_task_once';
 
 type JsonObject = Record<string, unknown>;
 type QueryValue = string | number | undefined | null;
@@ -146,6 +150,7 @@ interface TaskDashboardSummary {
   // Aggregated across the service's online instances: true when any instance
   // reported pause_requested=true. Null when no instance reported a known state.
   pause_requested: boolean | null;
+  supported_commands: TaskCommandKind[];
   // ---- Derived view-facing fields (computed by the plane) ----
   view_status: TaskViewStatus;
   success_rate: number;
@@ -282,6 +287,17 @@ interface ServiceCommandFanoutCounts {
   total: number;
 }
 
+interface ServiceCommandFanoutTargetSummary {
+  instance_id: string;
+  node_name: string | null;
+  connectivity: InstanceConnectivity;
+  session_id: string | null;
+  command_id: string | null;
+  outcome: 'dispatched' | 'queued' | 'skipped' | 'rejected';
+  reason_code: string | null;
+  reason_message: string | null;
+}
+
 export interface ServiceCommandFanoutResponse {
   kind: AgentCommandKind;
   target_mode: 'all_online' | 'selected_instances';
@@ -289,7 +305,49 @@ export interface ServiceCommandFanoutResponse {
   noop_reason_code: string | null;
   noop_reason_message: string | null;
   counts: ServiceCommandFanoutCounts;
+  dispatched: ServiceCommandFanoutTargetSummary[];
+  queued: ServiceCommandFanoutTargetSummary[];
+  skipped: ServiceCommandFanoutTargetSummary[];
+  rejected: ServiceCommandFanoutTargetSummary[];
 }
+
+interface AgentCommandSummary {
+  command_id: string;
+  kind: AgentCommandKind;
+  status: AgentCommandStatus;
+  error_code: string | null;
+  error_message: string | null;
+  updated_at: string;
+}
+
+interface AgentCommandListResponse {
+  items: AgentCommandSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface CommandCompletionResult {
+  completed: boolean;
+  failed: boolean;
+}
+
+const TERMINAL_COMMAND_STATUSES = new Set<AgentCommandStatus>([
+  'expired',
+  'rejected',
+  'succeeded',
+  'failed',
+  'timeout',
+  'cancelled',
+]);
+
+const FAILED_COMMAND_STATUSES = new Set<AgentCommandStatus>([
+  'expired',
+  'rejected',
+  'failed',
+  'timeout',
+  'cancelled',
+]);
 
 export interface ControlPlaneData {
   services: Service[];
@@ -541,6 +599,7 @@ function mapTask(service: ServiceSummary, task: TaskDashboardSummary): Task {
     serviceId: serviceId(service),
     name: task.task_name,
     viewStatus: task.view_status,
+    supportedCommands: task.supported_commands ?? [],
     pipelineSource: task.source_kind ?? task.source_name ?? 'Source',
     pipelineSourceLabel: task.source_label ?? 'input',
     sourceKind: task.source_kind,
@@ -762,6 +821,64 @@ export async function pollTaskPauseRequested(
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
   return false;
+}
+
+async function listServiceCommands(serviceName: string, environment: Environment, kind: AgentCommandKind) {
+  return request<AgentCommandListResponse>(`/api/v1/services/${encodeURIComponent(serviceName)}/commands`, {
+    query: {
+      environment,
+      kind,
+      limit: PAGE_SIZE,
+      offset: 0,
+    },
+  });
+}
+
+export function getFanoutCommandIds(response: ServiceCommandFanoutResponse): string[] {
+  return [...(response.dispatched ?? []), ...(response.queued ?? [])]
+    .map((target) => target.command_id)
+    .filter((commandId): commandId is string => Boolean(commandId));
+}
+
+export async function pollTaskCommandCompletion(
+  task: Task,
+  commandIds: string[],
+  {
+    intervalMs = 1000,
+    timeoutMs = 15000,
+    signal,
+  }: { intervalMs?: number; timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<CommandCompletionResult> {
+  if (!task.apiServiceName || !task.environment || commandIds.length === 0) {
+    return { completed: false, failed: false };
+  }
+
+  const expectedCommandIds = new Set(commandIds);
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (signal?.aborted) return { completed: false, failed: false };
+    try {
+      const response = await listServiceCommands(task.apiServiceName, task.environment, 'restart_task');
+      const matchingCommands = response.items.filter((command) => expectedCommandIds.has(command.command_id));
+      if (matchingCommands.length === expectedCommandIds.size) {
+        const completed = matchingCommands.every((command) => TERMINAL_COMMAND_STATUSES.has(command.status));
+        if (completed) {
+          return {
+            completed: true,
+            failed: matchingCommands.some((command) => FAILED_COMMAND_STATUSES.has(command.status)),
+          };
+        }
+      }
+    } catch {
+      // Keep polling. Pause/resume does the same because command state can lag
+      // the HTTP request briefly while the worker heartbeat catches up.
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, Math.max(intervalMs, 0)));
+  }
+
+  return { completed: false, failed: false };
 }
 
 export async function loadRecentEvents(environment?: Environment, limit = 20): Promise<RecentEvent[]> {

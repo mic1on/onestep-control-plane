@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+import re
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
@@ -57,6 +59,7 @@ NotificationDeliveryStatus = Literal["pending", "succeeded", "failed"]
 InstanceConnectivity = Literal["online", "offline", "never_reported"]
 ServiceListStatus = Literal["online", "attention", "offline"]
 TelemetryChannel = Literal["sync", "heartbeat", "metrics", "events"]
+CustomMetricKind = Literal["counter", "gauge"]
 ConsoleRole = Literal["viewer", "operator", "admin"]
 AgentCommandKind = Literal[
     "ping",
@@ -210,6 +213,11 @@ NOTIFICATION_EVENT_TYPES = frozenset(
     }
 )
 NOTIFICATION_EVENT_TYPES_REQUIRING_GRACE_PERIOD = frozenset({"task_missed_start"})
+CUSTOM_METRIC_NAME_RE = re.compile(r"^[a-zA-Z_:][a-zA-Z0-9_:]*$")
+CUSTOM_METRIC_LABEL_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+CUSTOM_METRIC_RESERVED_LABELS = frozenset(
+    {"service", "environment", "task", "instance_id", "metric"}
+)
 
 
 def _normalize_task_command_args(
@@ -305,6 +313,47 @@ class MetricsWindow(APIModel):
         return self
 
 
+class CustomMetricIngest(APIModel):
+    name: str = Field(min_length=1, max_length=255)
+    kind: CustomMetricKind
+    value: float
+    labels: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized or not CUSTOM_METRIC_NAME_RE.match(normalized):
+            raise ValueError("custom metric name must be a valid Prometheus metric name")
+        return normalized
+
+    @field_validator("value")
+    @classmethod
+    def validate_value(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("custom metric value must be finite")
+        return value
+
+    @field_validator("labels")
+    @classmethod
+    def validate_labels(cls, value: dict[str, str]) -> dict[str, str]:
+        labels: dict[str, str] = {}
+        for raw_key, raw_value in value.items():
+            key = raw_key.strip()
+            if not key or not CUSTOM_METRIC_LABEL_RE.match(key):
+                raise ValueError("custom metric label keys must be valid Prometheus labels")
+            if key in CUSTOM_METRIC_RESERVED_LABELS:
+                raise ValueError(f"custom metric label {key!r} is reserved")
+            labels[key] = str(raw_value)
+        return labels
+
+    @model_validator(mode="after")
+    def validate_counter_value(self) -> CustomMetricIngest:
+        if self.kind == "counter" and self.value < 0:
+            raise ValueError("custom counter metric value must be >= 0")
+        return self
+
+
 class TaskMetricWindowIngest(APIModel):
     task_name: str = Field(min_length=1, max_length=255)
     window_id: str = Field(min_length=1, max_length=255)
@@ -319,6 +368,7 @@ class TaskMetricWindowIngest(APIModel):
     inflight: int = Field(ge=0)
     avg_duration_ms: float | None = Field(default=None, ge=0)
     p95_duration_ms: float | None = Field(default=None, ge=0)
+    custom_metrics: list[CustomMetricIngest] = Field(default_factory=list)
 
 
 class MetricsIngestRequest(IngestionEnvelope):
@@ -1333,6 +1383,7 @@ class TaskDashboardSummary(APIModel):
     # reported false; None when no instance reported a known state. Drives the
     # "paused" UI status on the dashboard list (distinct from per-instance detail).
     pause_requested: bool | None = None
+    supported_commands: list[TaskCommandKind] = Field(default_factory=list)
     # ---- Derived view-facing fields (computed by the plane) ----
     view_status: TaskViewStatus = "idle"
     success_rate: float = Field(default=100, ge=0, le=100)

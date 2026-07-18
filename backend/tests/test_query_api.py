@@ -3264,6 +3264,99 @@ def test_list_service_tasks_aggregates_metrics_and_events(client, db_session) ->
     assert filtered.json()["items"][0]["task_name"] == "cleanup_orphans"
 
 
+def test_list_service_tasks_exposes_online_supported_commands(client, db_session) -> None:
+    now = datetime.now(UTC)
+    service = seed_service(db_session, name="billing-sync", environment="prod")
+    restartable_instance = seed_instance(
+        db_session,
+        service,
+        node_name="vm-restartable",
+        status="ok",
+        last_seen_at=now - timedelta(seconds=10),
+        app_snapshot_json={
+            "name": "billing-sync",
+            "task_control_states": [
+                {
+                    "task_name": "sync_users",
+                    "supported_commands": ["pause_task", "resume_task", "restart_task"],
+                    "pause_requested": False,
+                }
+            ],
+        },
+    )
+    legacy_instance = seed_instance(
+        db_session,
+        service,
+        node_name="vm-legacy",
+        status="ok",
+        last_seen_at=now - timedelta(seconds=10),
+        app_snapshot_json={
+            "name": "billing-sync",
+            "task_control_states": [
+                {
+                    "task_name": "legacy_sync",
+                    "supported_commands": ["pause_task", "resume_task", "restart_task"],
+                    "pause_requested": False,
+                }
+            ],
+        },
+    )
+    seed_agent_session(
+        db_session,
+        service,
+        restartable_instance,
+        status="active",
+        connected_at=now - timedelta(minutes=1),
+        session_id="sess_restartable",
+        accepted_capabilities_json=[
+            "command.pause_task",
+            "command.resume_task",
+            "command.restart_task",
+        ],
+    )
+    seed_agent_session(
+        db_session,
+        service,
+        legacy_instance,
+        status="active",
+        connected_at=now - timedelta(minutes=1),
+        session_id="sess_legacy",
+        accepted_capabilities_json=["command.pause_task", "command.resume_task"],
+    )
+    seed_task_definition(
+        db_session,
+        service,
+        task_name="sync_users",
+        source_name="interval:5s",
+        source_kind="interval",
+    )
+    seed_task_definition(
+        db_session,
+        service,
+        task_name="legacy_sync",
+        source_name="interval:5s",
+        source_kind="interval",
+    )
+    db_session.commit()
+
+    response = client.get(
+        "/api/v1/services/billing-sync/tasks",
+        params={"environment": "prod", "lookback_minutes": 15},
+    )
+
+    assert response.status_code == 200
+    by_task_name = {item["task_name"]: item for item in response.json()["items"]}
+    assert by_task_name["sync_users"]["supported_commands"] == [
+        "pause_task",
+        "resume_task",
+        "restart_task",
+    ]
+    assert by_task_name["legacy_sync"]["supported_commands"] == [
+        "pause_task",
+        "resume_task",
+    ]
+
+
 def test_get_service_task_detail_returns_summary_windows_and_events(client, db_session) -> None:
     now = datetime.now(UTC)
     service = seed_service(db_session, name="billing-sync", environment="prod")

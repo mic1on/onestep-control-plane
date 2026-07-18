@@ -28,6 +28,13 @@ export interface Service {
  * Kept local to avoid coupling types.ts to api.ts internals.
  */
 export type SourceConfig = Record<string, unknown>;
+export type TaskCommandKind =
+  | 'pause_task'
+  | 'resume_task'
+  | 'restart_task'
+  | 'discard_dead_letters'
+  | 'replay_dead_letters'
+  | 'run_task_once';
 
 export interface Task {
   id: string;
@@ -38,6 +45,8 @@ export interface Task {
   name: string;
   /** Derived by the plane from online state, pause_requested, error_count, activity. */
   viewStatus: 'running' | 'idle' | 'failed' | 'paused' | 'offline';
+  /** Commands currently supported by at least one online runtime target. */
+  supportedCommands: TaskCommandKind[];
   pipelineSource: string;
   pipelineSourceLabel: string;
   /**

@@ -1,6 +1,6 @@
 import { useState, MouseEvent } from 'react';
 import { Play, Square, RotateCcw, Edit3, Eye, MoreVertical, Database, ArrowRight, Layers, HelpCircle, CheckCircle, RefreshCw } from 'lucide-react';
-import { Task } from '../types';
+import { Task, type TaskCommandKind } from '../types';
 import { useI18n } from '../i18n';
 
 interface TasksListProps {
@@ -9,6 +9,10 @@ interface TasksListProps {
   onRestartTask: (taskId: string) => void;
   onToggleTaskStatus: (taskId: string) => void;
   pendingTaskId?: string | null;
+}
+
+function taskSupportsCommand(task: Task, command: TaskCommandKind): boolean {
+  return task.supportedCommands.includes(command);
 }
 
 export default function TasksList({
@@ -41,7 +45,10 @@ export default function TasksList({
         const isRunning = task.viewStatus === 'running';
         const isPaused = task.viewStatus === 'paused';
         const isOffline = task.viewStatus === 'offline';
-        const isToggleSupported = isRunning || isPaused;
+        const isToggleSupported =
+          (isRunning && taskSupportsCommand(task, 'pause_task')) ||
+          (isPaused && taskSupportsCommand(task, 'resume_task'));
+        const isRestartSupported = taskSupportsCommand(task, 'restart_task');
         const isPending = pendingTaskId === task.id;
         const isMenuOpen = openMenuId === task.id;
 
@@ -134,12 +141,14 @@ export default function TasksList({
                         ) : isRunning ? (
                           <>
                             <Square className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{t('button.stopTask')}</span>
+                            <span>{isToggleSupported ? t('button.stopTask') : t('button.unavailable')}</span>
                           </>
                         ) : (
                           <>
                             <Play className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{isPaused ? t('button.resumeTask') : t('button.unavailable')}</span>
+                            <span>
+                              {isPaused && isToggleSupported ? t('button.resumeTask') : t('button.unavailable')}
+                            </span>
                           </>
                         )}
                       </button>
@@ -149,7 +158,7 @@ export default function TasksList({
                           onRestartTask(task.id);
                           setOpenMenuId(null);
                         }}
-                        disabled={isPending}
+                        disabled={isPending || !isRestartSupported}
                         className="w-full text-left px-3 py-2 hover:bg-slate-50 text-slate-700 flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {isPending ? (
@@ -157,7 +166,13 @@ export default function TasksList({
                         ) : (
                           <RotateCcw className="w-3.5 h-3.5 text-slate-400" />
                         )}
-                        <span>{isPending ? t('button.processing') : t('button.restartTask')}</span>
+                        <span>
+                          {isPending
+                            ? t('button.processing')
+                            : isRestartSupported
+                            ? t('button.restartTask')
+                            : t('button.unavailable')}
+                        </span>
                       </button>
                     </div>
                   )}
