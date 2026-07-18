@@ -970,7 +970,13 @@ def test_query_endpoints_expose_derived_view_fields(client, db_session) -> None:
         source_name="cron:hourly",
         source_kind="cron",
         source_config_json={"schedule": "0 * * * *"},
-        emit_json=[{"kind": "mysql_table_sink", "name": "mysql:dw_users", "config": {"table": "dw_users"}}],
+        emit_json=[
+            {
+                "kind": "mysql_table_sink",
+                "name": "mysql:dw_users",
+                "config": {"table": "dw_users"},
+            }
+        ],
         concurrency=4,
         timeout_s=30.0,
         retry_policy={"kind": "constant", "config": {"attempts": 3}},
