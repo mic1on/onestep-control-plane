@@ -100,6 +100,7 @@
 .ui-refresh-ack {
   position: absolute;
   inset: 0;
+  z-index: 10;
   pointer-events: none;
   border-radius: 8px;
   background: rgb(79 70 229 / 0.055);
