@@ -559,6 +559,58 @@ test("renders the control plane dashboard", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Restart All" })).toBeVisible();
 });
 
+test.describe("service detail density", () => {
+  test.describe("on mobile", () => {
+    test.use({ viewport: { width: 390, height: 844 } });
+
+    test("moves service state and counts into compact affordances", async ({ page }) => {
+      await installApiMocks(page);
+      await page.goto("/");
+      await page.getByText("billing-sync").first().click();
+
+      const contextBarBox = await page.getByTestId("global-context-bar").boundingBox();
+      expect(contextBarBox?.height).toBeLessThanOrEqual(64);
+
+      const serviceName = page.getByTestId("service-breadcrumb-name");
+      const statusDot = page.getByTestId("mobile-service-status");
+      await expect(serviceName).toHaveText("billing-sync / prod");
+      await expect(statusDot).toHaveAttribute("title", "RUNNING");
+      const [serviceNameBox, statusDotBox] = await Promise.all([serviceName.boundingBox(), statusDot.boundingBox()]);
+      expect(statusDotBox?.x).toBeGreaterThanOrEqual((serviceNameBox?.x ?? 0) + (serviceNameBox?.width ?? 0));
+      await expect(page.getByTestId("service-header-status")).toBeHidden();
+
+      await expect(page.getByRole("button", { name: "Tasks 2" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Instances 2" })).toBeVisible();
+      await page.getByRole("button", { name: "Instances 2" }).click();
+      await expect(page).toHaveURL(/\?tab=instances$/);
+
+      await expect(page.getByTestId("telemetry-total-instances")).toBeHidden();
+      const health = page.getByTestId("telemetry-health");
+      const throughput = page.getByTestId("telemetry-throughput");
+      await expect(health).toBeVisible();
+      await expect(throughput).toBeVisible();
+      expect((await health.boundingBox())?.height).toBeLessThan(129);
+      expect((await throughput.boundingBox())?.height).toBeLessThan(129);
+    });
+  });
+
+  test.describe("on desktop", () => {
+    test.use({ viewport: { width: 1280, height: 900 } });
+
+    test("keeps the text badge and all telemetry cards", async ({ page }) => {
+      await installApiMocks(page);
+      await page.goto("/");
+      await page.getByText("billing-sync").first().click();
+
+      await expect(page.getByTestId("mobile-service-status")).toBeHidden();
+      await expect(page.getByTestId("service-header-status")).toContainText("RUNNING");
+      await expect(page.getByTestId("telemetry-total-instances")).toBeVisible();
+      await expect(page.getByRole("button", { name: "Tasks 2" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Instances 2" })).toBeVisible();
+    });
+  });
+});
+
 test("shows support links in nav bottom and signs out", async ({ page }) => {
   const api = await installApiMocks(page);
   await page.goto("/");
