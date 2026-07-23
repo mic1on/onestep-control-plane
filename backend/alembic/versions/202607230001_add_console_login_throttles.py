@@ -11,7 +11,6 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
-
 from onestep_control_plane_api.db.types import UTCDateTime
 
 revision: str = "202607230001"
