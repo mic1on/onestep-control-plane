@@ -12,7 +12,7 @@ services:
       POSTGRES_USER: ${ONESTEP_CP_POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${ONESTEP_CP_POSTGRES_PASSWORD:-postgres}
     ports:
-      - "${ONESTEP_CP_POSTGRES_PORT:-5432}:5432"
+      - "127.0.0.1:${ONESTEP_CP_POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test:
         [
@@ -47,7 +47,7 @@ services:
       ONESTEP_CP_UI_API_BASE_URL: ${ONESTEP_CP_UI_API_BASE_URL:-/}
       TZ: ${ONESTEP_CP_TIMEZONE:-Asia/Shanghai}
     ports:
-      - "${ONESTEP_CP_PORT:-4173}:8000"
+      - "127.0.0.1:${ONESTEP_CP_PORT:-4173}:8000"
     healthcheck:
       test:
         [

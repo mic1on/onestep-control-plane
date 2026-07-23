@@ -165,7 +165,10 @@ If port `5432` is already occupied locally, change `ONESTEP_CP_POSTGRES_PORT` an
 ## Docker Compose
 
 The repository includes a multi-stage `Dockerfile` and a full `docker-compose.yml`
-for `postgres`, `plane`, and `migrate`.
+for `postgres`, `plane`, and `migrate`. This is a local development stack: both
+published host ports bind to `127.0.0.1`, and the supplied `.env.example` enables
+development authentication behavior. Use `.env.deploy.example` with
+`docker-compose.deploy.yml` for a reachable deployment.
 
 Bring the full stack up:
 
