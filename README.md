@@ -108,6 +108,9 @@ Docker Compose files, deploy flow, and `scripts/start-local.sh`.
 | `ONESTEP_CP_CONSOLE_AUTH_USERNAME` | Backend auth | empty | Shared username for the monitoring console. Must be set together with `ONESTEP_CP_CONSOLE_AUTH_PASSWORD`. |
 | `ONESTEP_CP_CONSOLE_AUTH_PASSWORD` | Backend auth | empty | Shared password for the monitoring console. Must be set together with `ONESTEP_CP_CONSOLE_AUTH_USERNAME`. |
 | `ONESTEP_CP_CONSOLE_AUTH_SESSION_TTL_S` | Backend auth | `604800` | Console session lifetime in seconds. Advanced option for login cookie expiry. |
+| `ONESTEP_CP_CONSOLE_LOGIN_MAX_FAILURES` | Backend auth | `5` | Failed console logins allowed for one username before a temporary lockout. |
+| `ONESTEP_CP_CONSOLE_LOGIN_FAILURE_WINDOW_S` | Backend auth | `900` | Time window in seconds used to count failed console logins. |
+| `ONESTEP_CP_CONSOLE_LOGIN_LOCKOUT_S` | Backend auth | `900` | Temporary console-login lockout duration in seconds after reaching the failure limit. |
 | `ONESTEP_CP_CONSOLE_BASE_URL` | Backend notifications | empty / `https://cp.example.com` | Optional public base URL for the monitoring console. When set, webhook notifications render clickable absolute detail links instead of relative paths. |
 | `ONESTEP_CP_PIPELINE_CREDENTIALS_FERNET_KEY` | Backend pipeline builder | empty | Fernet key used to encrypt Pipeline Builder credentials. Required for production persistence across restarts and replicas. Generate with `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`. |
 | `ONESTEP_CP_CORS_ALLOW_ORIGINS` | Backend CORS | empty | Browser origins allowed to call the query API. Use explicit origins instead of `*` when console auth is enabled across origins. |
