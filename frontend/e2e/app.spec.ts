@@ -609,6 +609,50 @@ test.describe("service detail density", () => {
       await expect(page.getByRole("button", { name: "Instances 2" })).toBeVisible();
     });
   });
+
+  test.describe("at the small breakpoint", () => {
+    test.use({ viewport: { width: 640, height: 900 } });
+
+    test("restores the full telemetry card layout", async ({ page }) => {
+      await installApiMocks(page);
+      await page.goto("/");
+      await page.getByText("billing-sync").first().click();
+
+      const total = page.getByTestId("telemetry-total-instances");
+      const health = page.getByTestId("telemetry-health");
+      const throughput = page.getByTestId("telemetry-throughput");
+      await expect(total).toBeVisible();
+      await expect(health).toBeVisible();
+      await expect(throughput).toBeVisible();
+      expect((await total.boundingBox())?.height).toBe(160);
+      expect((await health.boundingBox())?.height).toBe(160);
+      expect((await throughput.boundingBox())?.height).toBe(160);
+    });
+  });
+
+  test.describe("mobile status variants", () => {
+    test.use({ viewport: { width: 390, height: 844 } });
+
+    test("keeps the text status badge on task detail", async ({ page }) => {
+      await installApiMocks(page);
+      await page.goto("/");
+      await page.getByText("billing-sync").first().click();
+      await page.getByText("orders_to_ledger").first().click();
+
+      await expect(page.getByTestId("service-header-status")).toContainText("RUNNING");
+    });
+
+    test("exposes the offline service state in the compact status dot", async ({ page }) => {
+      await installApiMocks(page);
+      await page.goto("/");
+      await page.getByText("audit-sync").first().click();
+
+      const status = page.getByTestId("mobile-service-status");
+      await expect(status).toHaveAttribute("title", "OFFLINE");
+      await expect(status).toContainText("OFFLINE");
+      await expect(status.locator("[aria-hidden='true']")).toHaveClass(/bg-slate-400/);
+    });
+  });
 });
 
 test("shows support links in nav bottom and signs out", async ({ page }) => {
@@ -757,6 +801,33 @@ test("anchors mobile task actions to the right of the trigger", async ({ page })
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await expect(trigger).toBeFocused();
+});
+
+test("truncates long task breadcrumbs on mobile", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installApiMocks(page);
+  await page.goto("/");
+
+  await page.getByText("billing-sync").first().click();
+  await page.getByText("orders_to_ledger").first().click();
+
+  const breadcrumb = page.getByLabel("Breadcrumb");
+  const serviceName = breadcrumb.getByRole("button").nth(1);
+  await expect(serviceName).toHaveText("billing-sync / prod");
+  await serviceName.evaluate((element) => {
+    element.textContent = "bidding-signup-extraction / prod";
+  });
+
+  const [breadcrumbBox, serviceNameBox] = await Promise.all([
+    breadcrumb.boundingBox(),
+    serviceName.boundingBox(),
+  ]);
+  expect(breadcrumbBox).not.toBeNull();
+  expect(serviceNameBox).not.toBeNull();
+  expect(breadcrumbBox!.height).toBeLessThan(24);
+  expect(serviceNameBox!.height).toBeLessThan(24);
+  expect(await serviceName.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  expect(breadcrumbBox!.x + breadcrumbBox!.width).toBeLessThanOrEqual(390);
 });
 
 test("fills the mobile task metric chart frame", async ({ page }) => {

@@ -133,7 +133,7 @@ export default function TelemetryStats({ service }: TelemetryStatsProps) {
         </div>
 
         <div
-          className={`z-10 flex items-center gap-1 text-[11px] font-semibold sm:text-[11px] ${
+          className={`z-10 flex items-center gap-1 text-[11px] font-semibold sm:text-xs ${
             hasTraffic ? 'text-indigo-600 hover:underline cursor-pointer' : 'text-slate-500'
           }`}
         >
