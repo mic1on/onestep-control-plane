@@ -1146,21 +1146,22 @@ export default function App() {
             >
               {/* Breadcrumb navigator under Command Bar */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <nav aria-label="Breadcrumb" className="flex min-w-0 items-center text-slate-400 font-medium text-xs mb-1">
+                <div className="min-w-0">
+                  <nav aria-label="Breadcrumb" className="flex w-full min-w-0 items-center overflow-hidden whitespace-nowrap text-slate-400 font-medium text-xs mb-1">
                     <button
                       type="button"
                       onClick={navigateToServicesList}
-                      className="rounded-sm hover:text-indigo-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                      className="shrink-0 rounded-sm hover:text-indigo-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
                     >
                       {tr('nav.services')}
                     </button>
-                    <ChevronRight className="w-3.5 h-3.5 mx-1" />
+                    <ChevronRight className="w-3.5 h-3.5 mx-1 shrink-0" />
                     {selectedTask ? (
                       <button
                         type="button"
                         onClick={() => navigateToService(selectedServiceId)}
-                        className="rounded-sm text-slate-800 font-bold hover:text-indigo-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                        title={selectedService.name}
+                        className="min-w-0 max-w-[45%] truncate rounded-sm text-slate-800 font-bold hover:text-indigo-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors sm:max-w-none"
                       >
                         {selectedService.name}
                       </button>
@@ -1177,16 +1178,18 @@ export default function App() {
                     )}
                     {selectedTask && (
                       <>
-                        <ChevronRight className="w-3.5 h-3.5 mx-1" />
+                        <ChevronRight className="w-3.5 h-3.5 mx-1 shrink-0" />
                         <button
                           type="button"
                           onClick={() => navigateToServiceTab('Tasks')}
-                          className="rounded-sm text-slate-500 font-semibold hover:text-indigo-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                          className="shrink-0 rounded-sm text-slate-500 font-semibold hover:text-indigo-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
                         >
                           {tr('tabs.tasks')}
                         </button>
-                        <ChevronRight className="w-3.5 h-3.5 mx-1" />
-                        <span className="text-slate-900 font-bold">{selectedTask.name}</span>
+                        <ChevronRight className="w-3.5 h-3.5 mx-1 shrink-0" />
+                        <span title={selectedTask.name} className="min-w-0 truncate text-slate-900 font-bold">
+                          {selectedTask.name}
+                        </span>
                       </>
                     )}
                   </nav>

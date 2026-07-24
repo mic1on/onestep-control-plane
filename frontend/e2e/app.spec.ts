@@ -828,6 +828,7 @@ test("truncates long task breadcrumbs on mobile", async ({ page }) => {
   expect(serviceNameBox!.height).toBeLessThan(24);
   expect(await serviceName.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
   expect(breadcrumbBox!.x + breadcrumbBox!.width).toBeLessThanOrEqual(390);
+  await breadcrumb.screenshot({ path: "/tmp/onestep-plane-mobile-breadcrumb.png" });
 });
 
 test("fills the mobile task metric chart frame", async ({ page }) => {
