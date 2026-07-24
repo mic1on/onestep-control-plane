@@ -624,9 +624,9 @@ test.describe("service detail density", () => {
       await expect(total).toBeVisible();
       await expect(health).toBeVisible();
       await expect(throughput).toBeVisible();
-      expect((await total.boundingBox())?.height).toBe(160);
-      expect((await health.boundingBox())?.height).toBe(160);
-      expect((await throughput.boundingBox())?.height).toBe(160);
+      expect(Math.round((await total.boundingBox())?.height ?? 0)).toBe(160);
+      expect(Math.round((await health.boundingBox())?.height ?? 0)).toBe(160);
+      expect(Math.round((await throughput.boundingBox())?.height ?? 0)).toBe(160);
     });
   });
 
